@@ -2,14 +2,9 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const connectDB = require('./config/db');
-const contactRoutes = require('./routes/contactRoutes');
-const adminRoutes = require('./routes/adminRoutes');
-
-// Connect to MongoDB
-connectDB();
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 10000;
 
 // Middleware
 app.use(cors({
@@ -19,56 +14,71 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Connect to MongoDB (but don't crash if it fails)
+let mongoConnected = false;
+
+(async () => {
+  mongoConnected = await connectDB();
+  console.log(`📡 MongoDB Status: ${mongoConnected ? '✅ Connected' : '⚠️ Not Connected'}`);
+})();
+
 // Routes
+const contactRoutes = require('./routes/contactRoutes');
+const adminRoutes = require('./routes/adminRoutes');
+
 app.use('/api/contacts', contactRoutes);
 app.use('/api/admin', adminRoutes);
 
-// Health check
+// Health check - show MongoDB status
 app.get('/api/health', (req, res) => {
   const mongoose = require('mongoose');
+  const dbStatus = mongoose.connection.readyState === 1 ? 'Connected' : 'Disconnected';
+  
   res.json({ 
     status: 'OK', 
     timestamp: new Date(),
-    database: mongoose.connection.readyState === 1 ? 'Connected' : 'Disconnected',
-    environment: process.env.NODE_ENV
+    server: 'Running',
+    mongodb: dbStatus,
+    environment: process.env.NODE_ENV,
+    frontend: process.env.FRONTEND_URL
   });
 });
 
-// Test route
+// Simple test endpoint
 app.get('/api/test', (req, res) => {
   res.json({ 
-    message: 'Backend is working!',
+    message: '🚀 Backend is working!',
+    timestamp: new Date(),
+    mongodb: mongoConnected ? 'Connected' : 'Not Connected'
+  });
+});
+
+// Root endpoint
+app.get('/', (req, res) => {
+  res.json({
+    message: '🎯 SaaSuno Backend API',
+    status: 'Live',
     endpoints: {
+      root: '/',
+      health: '/api/health',
+      test: '/api/test',
       contactForm: 'POST /api/contacts',
       getContacts: 'GET /api/contacts',
-      adminContacts: 'GET /api/admin/contacts',
-      statistics: 'GET /api/admin/statistics'
-    }
+      admin: {
+        getContacts: 'GET /api/admin/contacts',
+        statistics: 'GET /api/admin/statistics'
+      }
+    },
+    mongodb: mongoConnected ? '✅ Connected' : '⚠️ Not Connected'
   });
 });
 
-// 404 handler - FIXED: Don't use wildcard at beginning
-app.use((req, res) => {
-  res.status(404).json({
-    success: false,
-    message: 'API endpoint not found'
-  });
-});
-
-// Error handler
-app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).json({
-    success: false,
-    message: 'Internal Server Error'
-  });
-});
-
-// Start server
+// Start server (even if MongoDB fails!)
 app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`📡 MongoDB: ${require('mongoose').connection.readyState === 1 ? '✅ Connected' : '❌ Connecting...'}`);
-  console.log(`🌐 Frontend URL: ${process.env.FRONTEND_URL}`);
-  console.log(`🔗 Test endpoint: http://localhost:${PORT}/api/test`);
-  console.log(`📬 Contact form: POST http://localhost:${PORT}/api/contacts`);
+  console.log('='.repeat(50));
+  console.log(`🚀 SERVER STARTED on port ${PORT}`);
+  console.log(`🌐 URL: https://saasuno-backend.onrender.com`);
+  console.log(`🔗 Health: https://saasuno-backend.onrender.com/api/health`);
+  console.log(`📡 MongoDB: ${mongoConnected ? '✅ Connected' : '⚠️ Not Connected'}`);
+  console.log('='.repeat(50));
 });

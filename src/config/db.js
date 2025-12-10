@@ -4,25 +4,22 @@ const connectDB = async () => {
   try {
     console.log('🔌 Connecting to MongoDB...');
     
-    // Log the URI (hide password for security)
-    const uri = process.env.MONGODB_URI;
-    const safeUri = uri ? uri.replace(/:\/\/[^:]+:[^@]+@/, '://***:***@') : 'Not set';
-    console.log('📡 URI:', safeUri);
-    
-    await mongoose.connect(process.env.MONGODB_URI);
+    // Try to connect but don't crash if it fails
+    await mongoose.connect(process.env.MONGODB_URI, {
+      serverSelectionTimeoutMS: 5000 // 5 second timeout
+    });
     
     console.log('✅ MongoDB Connected Successfully');
-    console.log('🏢 Database:', mongoose.connection.db.databaseName);
-    console.log('📊 Collections:', (await mongoose.connection.db.collections()).map(c => c.collectionName));
+    return true;
     
   } catch (error) {
-    console.error('❌ MongoDB Connection Failed:', error.message);
-    console.error('💡 Check:');
-    console.error('1. MongoDB Atlas cluster is running');
-    console.error('2. IP is whitelisted (0.0.0.0/0 for all)');
-    console.error('3. Username/password is correct');
-    console.error('4. Network connection is stable');
-    process.exit(1);
+    console.error('⚠️ MongoDB Connection Failed:', error.message);
+    console.log('🔄 Starting server WITHOUT MongoDB connection...');
+    console.log('📝 Note: Form submissions will work but not save to database');
+    console.log('💡 Fix: Check MONGODB_URI in Render environment variables');
+    
+    // Return false but DON'T exit the process
+    return false;
   }
 };
 
