@@ -31,7 +31,7 @@ router.post('/', async (req, res) => {
     res.status(201).json({
       success: true,
       data: contact,
-      message: '✅ Contact saved successfully to MongoDB!'
+    
     });
     
   } catch (error) {
