@@ -7,7 +7,7 @@ const authenticateAdmin = (req, res, next) => {
   const authHeader = req.headers.authorization;
   
   // Simple check - you can add proper authentication later
-  if (!authHeader || authHeader !== `Bearer ${process.env.ADMIN_TOKEN || 'admin123'}`) {
+  if (!authHeader || authHeader !== `Bearer ${process.env.ADMIN_TOKEN || 'SaasUno@2025'}`) {
     return res.status(401).json({
       success: false,
       message: 'Unauthorized. Admin access required.'
