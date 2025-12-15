@@ -31,7 +31,7 @@ router.post('/', async (req, res) => {
     res.status(201).json({
       success: true,
       data: contact,
-    
+      message: 'Contact submitted successfully'
     });
     
   } catch (error) {

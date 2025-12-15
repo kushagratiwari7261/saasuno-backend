@@ -2,7 +2,13 @@ const express = require('express');
 const router = express.Router();
 const Contact = require('../models/Contact');
 
-// Admin authentication middleware (simple for now)
+// Add logging middleware for debugging
+router.use((req, res, next) => {
+  console.log(`[ADMIN API] ${new Date().toISOString()} ${req.method} ${req.originalUrl}`);
+  next();
+});
+
+// Admin authentication middleware
 const authenticateAdmin = (req, res, next) => {
   const authHeader = req.headers.authorization;
   
@@ -59,6 +65,7 @@ router.get('/contacts', authenticateAdmin, async (req, res) => {
       }
     });
   } catch (error) {
+    console.error('Get contacts error:', error);
     res.status(500).json({
       success: false,
       message: 'Server Error'
@@ -66,16 +73,71 @@ router.get('/contacts', authenticateAdmin, async (req, res) => {
   }
 });
 
-// Update contact status (Admin only)
+// ✅ ADDED: Update contact (Admin only) - General PATCH endpoint
+// This fixes the 404 error - frontend is calling PATCH /api/admin/contacts/:id
+router.patch('/contacts/:id', authenticateAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updates = req.body;
+    
+    console.log(`Updating contact ${id} with:`, updates);
+    
+    // Validate ID format
+    if (!id.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid contact ID format'
+      });
+    }
+    
+    // Find contact first to ensure it exists
+    const existingContact = await Contact.findById(id);
+    if (!existingContact) {
+      return res.status(404).json({
+        success: false,
+        message: 'Contact not found'
+      });
+    }
+    
+    // Update contact
+    const contact = await Contact.findByIdAndUpdate(
+      id,
+      updates,
+      { new: true, runValidators: true }
+    );
+    
+    res.json({
+      success: true,
+      data: contact,
+      message: 'Contact updated successfully'
+    });
+  } catch (error) {
+    console.error('Update contact error:', error);
+    
+    if (error.name === 'ValidationError') {
+      return res.status(400).json({
+        success: false,
+        message: error.message
+      });
+    }
+    
+    res.status(500).json({
+      success: false,
+      message: 'Server Error'
+    });
+  }
+});
+
+// Update contact status (Admin only) - Specific endpoint for status only
 router.patch('/contacts/:id/status', authenticateAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     const { status } = req.body;
     
-    if (!['pending', 'contacted', 'rejected'].includes(status)) {
+    if (!status || !['pending', 'contacted', 'rejected'].includes(status)) {
       return res.status(400).json({
         success: false,
-        message: 'Invalid status value'
+        message: 'Valid status is required (pending, contacted, rejected)'
       });
     }
     
@@ -98,6 +160,7 @@ router.patch('/contacts/:id/status', authenticateAdmin, async (req, res) => {
       message: 'Status updated successfully'
     });
   } catch (error) {
+    console.error('Update status error:', error);
     res.status(500).json({
       success: false,
       message: 'Server Error'
@@ -145,6 +208,7 @@ router.get('/statistics', authenticateAdmin, async (req, res) => {
       }
     });
   } catch (error) {
+    console.error('Get statistics error:', error);
     res.status(500).json({
       success: false,
       message: 'Server Error'
@@ -171,6 +235,7 @@ router.delete('/contacts/:id', authenticateAdmin, async (req, res) => {
       message: 'Contact deleted successfully'
     });
   } catch (error) {
+    console.error('Delete contact error:', error);
     res.status(500).json({
       success: false,
       message: 'Server Error'
