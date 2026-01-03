@@ -67,9 +67,11 @@ let mongoConnected = false;
 // Routes
 const contactRoutes = require('./routes/contactRoutes');
 const adminRoutes = require('./routes/adminRoutes');
+const visitorRoutes = require('./routes/visitorRoutes');
 
 app.use('/api/contacts', contactRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/visitors', visitorRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
@@ -92,6 +94,10 @@ app.get('/api/health', (req, res) => {
     endpoints: {
       contact_form: 'POST /api/contacts',
       get_contacts: 'GET /api/contacts',
+       visitors: {  // ADD THIS SECTION
+        get_count: 'GET /api/visitors/count',
+        increment: 'POST /api/visitors/increment'
+      },
       admin: {
         get_contacts: 'GET /api/admin/contacts',
         update_contact: 'PATCH /api/admin/contacts/:id',
@@ -108,7 +114,8 @@ app.get('/api/test', (req, res) => {
     timestamp: new Date().toISOString(),
     mongodb: mongoConnected ? 'Connected ✅' : 'Not Connected ❌',
     cors: 'Enabled',
-    request_origin: req.headers.origin || 'Not specified'
+    request_origin: req.headers.origin || 'Not specified',
+       visitor_endpoints_available: true 
   });
 });
 
@@ -139,6 +146,9 @@ app.use((req, res) => {
       health: 'GET /api/health',
       test: 'GET /api/test',
       contact_form: 'POST /api/contacts',
+      visitors: {  // ADD THIS
+        get_count: 'GET /api/visitors/count',
+        increment: 'POST /api/visitors/increment'},
       admin: 'GET /api/admin/* (protected)'
     }
   });
@@ -183,3 +193,4 @@ app.listen(PORT, () => {
   console.log(`   Allowed Origins: ${allowedOrigins.join(', ')}`);
   console.log('');
 });
+
