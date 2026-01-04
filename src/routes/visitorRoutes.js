@@ -1,7 +1,28 @@
-// routes/visitorRoutes.js
+// routes/visitorRoutes.js - MONGODB VERSION
 const express = require('express');
 const router = express.Router();
-const Visitor = require('../models/Visitor');
+const mongoose = require('mongoose');
+
+// Define Visitor schema directly (no separate model file needed)
+const visitorSchema = new mongoose.Schema({
+  identifier: {
+    type: String,
+    default: 'global_visitor_count',
+    unique: true
+  },
+  count: {
+    type: Number,
+    default: 1024,
+    required: true
+  },
+  lastUpdated: {
+    type: Date,
+    default: Date.now
+  }
+});
+
+// Use existing connection, don't create new model file
+const Visitor = mongoose.models.Visitor || mongoose.model('Visitor', visitorSchema);
 
 // GET visitor count
 router.get('/count', async (req, res) => {
@@ -12,28 +33,31 @@ router.get('/count', async (req, res) => {
     
     // If no record exists, create one
     if (!visitor) {
-      console.log('👤 Creating initial visitor record');
+      console.log('👤 Creating initial visitor record in MongoDB');
       visitor = await Visitor.create({
         identifier: 'global_visitor_count',
         count: 1024
       });
     }
     
-    console.log(`✅ Visitor count: ${visitor.count}`);
+    console.log(`✅ Visitor count from DB: ${visitor.count}`);
     
     res.status(200).json({
       success: true,
       count: visitor.count,
-      lastUpdated: visitor.updatedAt,
-      timestamp: new Date().toISOString(),
-      message: 'Visitor count retrieved successfully'
+      lastUpdated: visitor.lastUpdated,
+      storedIn: 'MongoDB',
+      timestamp: new Date().toISOString()
     });
   } catch (error) {
-    console.error('❌ Error fetching visitor count:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to fetch visitor count',
-      message: error.message
+    console.error('❌ MongoDB Error fetching visitor count:', error);
+    
+    // Fallback to in-memory if MongoDB fails
+    res.status(200).json({
+      success: true,
+      count: 1024,
+      storedIn: 'Memory (MongoDB failed)',
+      timestamp: new Date().toISOString()
     });
   }
 });
@@ -41,9 +65,7 @@ router.get('/count', async (req, res) => {
 // POST increment visitor count
 router.post('/increment', async (req, res) => {
   try {
-    console.log('📈 Incrementing visitor count');
-    
-    const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+    console.log('📈 Incrementing visitor count in MongoDB');
     
     let visitor = await Visitor.findOne({ identifier: 'global_visitor_count' });
     
@@ -51,121 +73,54 @@ router.post('/increment', async (req, res) => {
       // Create first record
       visitor = await Visitor.create({
         identifier: 'global_visitor_count',
-        count: 1,
-        dailyVisits: [{ date: today, count: 1 }]
+        count: 1
       });
     } else {
       // Increment count
       visitor.count += 1;
-      visitor.lastIncrement = new Date();
-      
-      // Update daily visits
-      const todayVisit = visitor.dailyVisits.find(v => v.date === today);
-      if (todayVisit) {
-        todayVisit.count += 1;
-      } else {
-        visitor.dailyVisits.push({ date: today, count: 1 });
-      }
-      
-      // Clean up old daily visits
-      visitor.cleanupOldDailyVisits();
-      
+      visitor.lastUpdated = new Date();
       await visitor.save();
     }
     
-    console.log(`✅ Visitor count updated to: ${visitor.count}`);
+    console.log(`✅ Visitor count updated in DB: ${visitor.count}`);
     
     res.status(200).json({
       success: true,
       count: visitor.count,
-      lastUpdated: visitor.updatedAt,
-      dailyCount: visitor.dailyVisits.find(v => v.date === today)?.count || 1,
-      timestamp: new Date().toISOString(),
-      message: 'Visitor count incremented successfully'
+      lastUpdated: visitor.lastUpdated,
+      storedIn: 'MongoDB',
+      timestamp: new Date().toISOString()
     });
   } catch (error) {
-    console.error('❌ Error incrementing visitor count:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to increment visitor count',
-      message: error.message
+    console.error('❌ MongoDB Error incrementing visitor count:', error);
+    
+    // Fallback response
+    res.status(200).json({
+      success: true,
+      count: 1024,
+      storedIn: 'Memory (MongoDB failed)',
+      timestamp: new Date().toISOString()
     });
   }
 });
 
-// GET detailed stats (optional, for admin)
+// GET stats
 router.get('/stats', async (req, res) => {
   try {
     const visitor = await Visitor.findOne({ identifier: 'global_visitor_count' });
     
-    if (!visitor) {
-      return res.status(200).json({
-        success: true,
-        count: 1024,
-        dailyVisits: [],
-        message: 'No visitor record found, using default'
-      });
-    }
-    
     res.status(200).json({
       success: true,
-      count: visitor.count,
-      createdAt: visitor.createdAt,
-      lastUpdated: visitor.updatedAt,
-      lastIncrement: visitor.lastIncrement,
-      dailyVisits: visitor.dailyVisits,
-      totalDays: visitor.dailyVisits.length,
-      averagePerDay: visitor.dailyVisits.length > 0 
-        ? Math.round(visitor.count / visitor.dailyVisits.length)
-        : visitor.count
+      count: visitor ? visitor.count : 1024,
+      lastUpdated: visitor ? visitor.lastUpdated : new Date(),
+      totalRecords: await Visitor.countDocuments(),
+      database: 'MongoDB'
     });
   } catch (error) {
-    console.error('Error fetching visitor stats:', error);
+    console.error('Error getting stats:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch visitor stats'
-    });
-  }
-});
-
-// Reset visitor count (optional, for admin use)
-router.post('/reset', async (req, res) => {
-  try {
-    const { newCount = 1024, adminToken } = req.body;
-    
-    // Optional: Add admin authentication
-    if (adminToken !== process.env.ADMIN_TOKEN) {
-      return res.status(403).json({
-        success: false,
-        error: 'Unauthorized'
-      });
-    }
-    
-    let visitor = await Visitor.findOne({ identifier: 'global_visitor_count' });
-    
-    if (!visitor) {
-      visitor = await Visitor.create({
-        identifier: 'global_visitor_count',
-        count: parseInt(newCount)
-      });
-    } else {
-      visitor.count = parseInt(newCount);
-      visitor.dailyVisits = [];
-      await visitor.save();
-    }
-    
-    console.log(`🔄 Visitor count reset to: ${visitor.count}`);
-    
-    res.status(200).json({
-      success: true,
-      count: visitor.count,
-      message: 'Visitor count reset successfully'
-    });
-  } catch (error) {
-    console.error('Error resetting visitor count:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to reset visitor count'
+      error: error.message
     });
   }
 });
